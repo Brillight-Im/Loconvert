@@ -1,33 +1,63 @@
 <!doctype html>
 <html lang="en">
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>File converter</title>
-<style>
-  body { font-family: system-ui, sans-serif; background:#fffbe9; margin:0; }
-  .wrap { max-width:1100px; margin: 56px auto; padding: 0 20px; }
-  h1 { font-size:40px; margin: 8px 0 4px; }
-  p.lead { color:#666; margin:0 0 28px; }
-  .grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
-  .card { background:#fff; border-radius:16px; padding:18px; box-shadow:0 6px 24px rgba(0,0,0,.06); text-decoration:none; color:#111; }
-  .card h3 { margin:0 0 8px; font-size:18px; }
-  .card p { margin:0; color:#555; }
-  .badge { display:inline-block; font-size:12px; background:#ffefb0; border:1px solid #f3d36b; padding:4px 10px; border-radius:999px; }
-</style>
-<div class="wrap">
-  <span class="badge">NanoApps</span>
-  <h1>Fun, Tiny NanoApps</h1>
-  <p class="lead">All tools run in your browser. No upload. No server.</p>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NanoApps - Light & Fast</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B5BDB' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12L22 2 13 22 11 13 2 12'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --sky:#E6F2FF;
+      --indigo:#3B5BDB;
+      --white:#FFFFFF;
+      --soft-gray:#E9ECEF;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      margin:0;
+      background: var(--sky) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='60'%3E%3Cpath d='M0 30 q30 -20 60 0 t60 0' fill='none' stroke='%23E9ECEF' stroke-width='2' stroke-dasharray='2 8'/%3E%3C/svg%3E") repeat;
+      color: var(--indigo);
+    }
+    .wrap { max-width:1100px; margin:56px auto; padding:0 20px; }
+    .hero { text-align:center; margin-bottom:28px; }
+    .plane { width:60px; height:60px; }
+    .plane.loading { animation:glide 1.2s ease-out forwards; }
+    .plane.success { animation:whoosh 0.4s ease-in forwards; }
+    h1 { font-size:40px; margin:8px 0 4px; font-weight:700; }
+    p.lead { color:#333; margin:0 0 28px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+    .card { background:var(--white); border-radius:16px; padding:18px; box-shadow:0 6px 24px rgba(0,0,0,.06); text-decoration:none; color: var(--indigo); }
+    .card h3 { margin:0 0 8px; font-size:18px; }
+    .card p { margin:0; color:#555; }
+    .badge { display:inline-block; font-size:12px; background:var(--indigo); color:var(--white); padding:4px 12px; border-radius:999px; }
+    @keyframes glide {
+      from { transform: translateX(-40px); opacity:0; }
+      to { transform: translateX(0); opacity:1; }
+    }
+    @keyframes whoosh {
+      to { transform: translateX(40px); opacity:0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <svg class="plane loading" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12L22 2 13 22 11 13 2 12"/></svg>
+      <span class="badge">NanoApps</span>
+      <h1>Light &amp; Fast NanoApps</h1>
+      <p class="lead">All tools run in your browser. No upload. No server.</p>
+    </div>
 
-  <div class="grid">
-    <a class="card" href="tools/pdf_merge.html">
-      <h3>PDF Merge / Reorder</h3>
-      <p>Combine PDFs, reorder pages, delete pages — locally.</p>
-    </a>
-    <a class="card" href="tools/image_to_pdf.html">
-      <h3>Images → PDF</h3>
-      <p>Pack multiple images into a PDF.</p>
-    </a>
+    <div class="grid">
+      <a class="card" href="tools/pdf_merge.html">
+        <h3>PDF Merge / Reorder</h3>
+        <p>Combine PDFs, reorder pages, delete pages — locally.</p>
+      </a>
+      <a class="card" href="tools/image_to_pdf.html">
+        <h3>Images → PDF</h3>
+        <p>Pack multiple images into a PDF.</p>
+      </a>
+    </div>
   </div>
-</div>
+</body>
 </html>
