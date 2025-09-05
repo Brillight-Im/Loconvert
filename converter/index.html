@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>File converter</title>
+<style>
+  body { font-family: system-ui, sans-serif; background:#fffbe9; margin:0; }
+  .wrap { max-width:1100px; margin: 56px auto; padding: 0 20px; }
+  h1 { font-size:40px; margin: 8px 0 4px; }
+  p.lead { color:#666; margin:0 0 28px; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+  .card { background:#fff; border-radius:16px; padding:18px; box-shadow:0 6px 24px rgba(0,0,0,.06); text-decoration:none; color:#111; }
+  .card h3 { margin:0 0 8px; font-size:18px; }
+  .card p { margin:0; color:#555; }
+  .badge { display:inline-block; font-size:12px; background:#ffefb0; border:1px solid #f3d36b; padding:4px 10px; border-radius:999px; }
+</style>
+<div class="wrap">
+  <span class="badge">NanoApps</span>
+  <h1>Fun, Tiny NanoApps</h1>
+  <p class="lead">All tools run in your browser. No upload. No server.</p>
+
+  <div class="grid">
+    <a class="card" href="tools/pdf_merge.html">
+      <h3>PDF Merge / Reorder</h3>
+      <p>Combine PDFs, reorder pages, delete pages — locally.</p>
+    </a>
+    <a class="card" href="tools/pdf_to_images.html">
+      <h3>PDF → Images</h3>
+      <p>Export pages to PNG/JPG. Client-only.</p>
+    </a>
+    <a class="card" href="tools/image_to_pdf.html">
+      <h3>Images → PDF</h3>
+      <p>Pack multiple images into a PDF.</p>
+    </a>
+    <a class="card" href="tools/image_convert.html">
+      <h3>Image Converter</h3>
+      <p>PNG/JPG/WebP/BMP/GIF ↔ convert & resize.</p>
+    </a>
+    <a class="card" href="tools/docx_to_pdf.html">
+      <h3>Word (DOCX) → PDF (Beta)</h3>
+      <p>Client-only using Mammoth.js. May lose complex layout.</p>
+    </a>
+  </div>
+</div>
+</html>

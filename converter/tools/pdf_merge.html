@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PDF Merge / Reorder — Local</title>
+
+<input id="files" type="file" accept="application/pdf" multiple />
+<button id="download" disabled>Download Merged PDF</button>
+<div id="thumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;"></div>
+
+<script type="module">
+  import * as PDFJS from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs";
+  import { PDFDocument } from "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
+
+  PDFJS.GlobalWorkerOptions.workerSrc =
+    "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.js";
+
+  const input = document.getElementById('files');
+  const thumbs = document.getElementById('thumbs');
+  const btn = document.getElementById('download');
+
+  let pageList = []; // {fileIndex, pageIndex, data:ArrayBuffer}
+
+  input.onchange = async () => {
+    pageList = [];
+    thumbs.innerHTML = '';
+    const files = [...input.files];
+
+    // 1) Read all PDFs into memory
+    const buffers = await Promise.all(files.map(f => f.arrayBuffer()));
+
+    // 2) Build thumbnails and a draggable list
+    for (let fi = 0; fi < buffers.length; fi++) {
+      const pdf = await PDFJS.getDocument({ data: buffers[fi] }).promise;
+      for (let pi = 1; pi <= pdf.numPages; pi++) {
+        const page = await pdf.getPage(pi);
+        const viewport = page.getViewport({ scale: 0.2 });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        const item = document.createElement('div');
+        item.style.cssText = "border:1px solid #ddd;padding:6px;border-radius:8px;cursor:grab;";
+        item.draggable = true;
+        item.appendChild(canvas);
+        item.dataset.idx = String(pageList.length);
+        thumbs.appendChild(item);
+
+        pageList.push({ fileIndex: fi, pageIndex: pi - 1, data: buffers[fi] });
+      }
+    }
+
+    // Drag-and-drop reorder
+    let dragIdx = null;
+    thumbs.addEventListener('dragstart', e => dragIdx = +e.target.dataset.idx);
+    thumbs.addEventListener('dragover', e => e.preventDefault());
+    thumbs.addEventListener('drop', e => {
+      const target = e.target.closest('[data-idx]');
+      if (!target) return;
+      const dropIdx = +target.dataset.idx;
+      const [moved] = pageList.splice(dragIdx, 1);
+      pageList.splice(dropIdx, 0, moved);
+      // re-render order numbers
+      [...thumbs.children].forEach((el,i)=> el.dataset.idx = i);
+      thumbs.insertBefore(thumbs.children[dragIdx], thumbs.children[dropIdx]);
+    });
+
+    btn.disabled = pageList.length === 0;
+  };
+
+  btn.onclick = async () => {
+    const out = await PDFDocument.create();
+    // Group by file to minimize parsing
+    const byFile = new Map();
+    for (const p of pageList) {
+      if (!byFile.has(p.fileIndex)) {
+        byFile.set(p.fileIndex, await PDFDocument.load(p.data));
+      }
+    }
+    for (const p of pageList) {
+      const src = byFile.get(p.fileIndex);
+      const [copied] = await out.copyPages(src, [p.pageIndex]);
+      out.addPage(copied);
+    }
+    const pdfBytes = await out.save();
+    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = "merged.pdf";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+</script>
+</html>

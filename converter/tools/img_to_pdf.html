@@ -1,0 +1,23 @@
+<input id="imgs" type="file" accept="image/*" multiple />
+<button id="save" disabled>Save PDF</button>
+<script type="module">
+  import { PDFDocument } from "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
+  const f = document.getElementById('imgs'), b = document.getElementById('save');
+  let files = [];
+  f.onchange = () => { files = [...f.files]; b.disabled = files.length===0; };
+  b.onclick = async () => {
+    const doc = await PDFDocument.create();
+    for (const file of files) {
+      const buf = await file.arrayBuffer();
+      let img, dims;
+      if (file.type.includes('png')) { img = await doc.embedPng(buf); dims = img.scale(1); }
+      else { img = await doc.embedJpg(buf); dims = img.scale(1); }
+      const page = doc.addPage([dims.width, dims.height]);
+      page.drawImage(img, { x:0, y:0, width:dims.width, height:dims.height });
+    }
+    const bytes = await doc.save();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([bytes], {type:"application/pdf"}));
+    a.download = 'images.pdf'; a.click();
+  };
+</script>
