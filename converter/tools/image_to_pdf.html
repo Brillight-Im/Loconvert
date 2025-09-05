@@ -1,23 +1,357 @@
-<input id="imgs" type="file" accept="image/*" multiple />
-<button id="save" disabled>Save PDF</button>
-<script type="module">
-  import { PDFDocument } from "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
-  const f = document.getElementById('imgs'), b = document.getElementById('save');
-  let files = [];
-  f.onchange = () => { files = [...f.files]; b.disabled = files.length===0; };
-  b.onclick = async () => {
-    const doc = await PDFDocument.create();
-    for (const file of files) {
-      const buf = await file.arrayBuffer();
-      let img, dims;
-      if (file.type.includes('png')) { img = await doc.embedPng(buf); dims = img.scale(1); }
-      else { img = await doc.embedJpg(buf); dims = img.scale(1); }
-      const page = doc.addPage([dims.width, dims.height]);
-      page.drawImage(img, { x:0, y:0, width:dims.width, height:dims.height });
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Images to PDF (Drag & Drop + Grid Reorder)</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../shared/tool.css">
+<script src="../vendor/pdf-lib/pdf-lib.min.js"></script>
+<header class="site-top">
+  <div class="container">
+    <div class="brand">
+      <a href="../index.html" style="display:flex;gap:10px;align-items:center;text-decoration:none;color:inherit;">
+        <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12L22 2 13 22 11 13 2 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Loconvert</span>
+      </a>
+    </div>
+    <span class="tag">Local‑only</span>
+  </div>
+</header>
+
+<div class="tool-head">
+  <h1>이미지 → PDF · 순서 정렬</h1>
+  <p class="sub">이미지를 PDF로 변환합니다. 브라우저 내부에서만 처리합니다. 서버 업로드 없음.</p>
+  <div class="toolbar">
+    <input id="file" type="file" accept="image/*" multiple hidden>
+    <label class="btn" id="pick" for="file">이미지 선택</label>
+    <button class="btn alt" id="clear">모두 비우기</button>
+    <button class="btn push-right" id="download" disabled>PDF 다운로드</button>
+  </div>
+  <div class="statusbar">
+    <div class="left">
+      <strong>총 이미지:</strong> <span id="count">0</span>
+      <span id="status" style="color:#666"></span>
+    </div>
+    <progress id="prog" max="100" value="0" style="display:none"></progress>
+  </div>
+</div>
+
+<div class="zone">
+  <div id="drop" class="drop">
+    <strong>여기에 이미지 파일을 드래그&드롭</strong> 하거나 <em>이미지 선택</em> 버튼을 사용하세요.<br>
+    여러 이미지를 넣으면 아래 격자로 나열됩니다. 썸네일을 드래그해 순서를 바꾸세요.
+    <div style="margin-top:10px;color:#777;font-size:12px">팁: 타일의 삭제 버튼으로 <u>불필요한 이미지 제거</u> 가능합니다.</div>
+  </div>
+
+  <div id="grid" class="grid"></div>
+</div>
+
+<script>
+  // ===== 라이브러리 로드 =====
+  let PDFDocument = null;
+  async function ensureLib() {
+    if (PDFDocument) return true;
+    try {
+      if (window.PDFLib) {
+        PDFDocument = window.PDFLib.PDFDocument;
+        return true;
+      }
+      statusEl.textContent = 'PDF-lib 라이브러리를 찾을 수 없습니다.';
+      return false;
+    } catch (e) {
+      console.error('라이브러리 로드 실패', e);
+      statusEl.textContent = '라이브러리를 불러오지 못했습니다: ' + e.message;
+      return false;
     }
-    const bytes = await doc.save();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([bytes], {type:"application/pdf"}));
-    a.download = 'images.pdf'; a.click();
+  }
+
+  // ===== 요소 =====
+  const fileInput = document.getElementById('file');
+  const dropZone = document.getElementById('drop');
+  const grid = document.getElementById('grid');
+  const clearBtn = document.getElementById('clear');
+  const dlBtn = document.getElementById('download');
+  const countEl = document.getElementById('count');
+  const statusEl = document.getElementById('status');
+  const prog = document.getElementById('prog');
+
+  // ===== 상태 =====
+  // images: [{id, file, canvas}]
+  let images = [];
+
+  // ===== 파일 추가 처리 =====
+  async function addFiles(fileList) {
+    const files = [...fileList].filter(isImageFile);
+    if (!files.length) return;
+
+    // 진행률 표시
+    prog.style.display = 'block';
+    prog.value = 0;
+    statusEl.textContent = '이미지 로딩 중…';
+
+    // 파일 단위로 처리
+    let processed = 0;
+    for (const file of files) {
+      const canvas = await createImageThumbnail(file);
+      const id = crypto.randomUUID();
+      images.push({ id, file, canvas });
+
+      // 타일 DOM 추가
+      addTile({ id, canvas, fileName: file.name });
+      updateCount();
+      
+      processed++;
+      prog.value = Math.round(processed / files.length * 100);
+    }
+    statusEl.textContent = '';
+    prog.style.display = 'none';
+    enableDownloadIfAny();
+  }
+
+  // ===== 이미지 썸네일 생성 =====
+  async function createImageThumbnail(file) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 썸네일 크기 계산 (최대 200x200, 비율 유지)
+        const maxSize = 200;
+        let { width, height } = img;
+        if (width > height) {
+          if (width > maxSize) {
+            height = (height * maxSize) / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = (width * maxSize) / height;
+            height = maxSize;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  // ===== 타일 DOM 생성 =====
+  function addTile({ id, canvas, fileName }) {
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+    tile.draggable = true;
+    tile.dataset.id = id;
+
+    // 이미지 캔버스 크기 제한
+    canvas.style.maxWidth = '100%';
+    canvas.style.maxHeight = '160px';
+    canvas.style.objectFit = 'contain';
+    canvas.style.display = 'block';
+    
+    tile.appendChild(canvas);
+    
+    // 파일명을 하단에
+    const filename = document.createElement('div');
+    filename.className = 'filename';
+    filename.textContent = fileName;
+    tile.appendChild(filename);
+
+    // 홀드시 나타날 액션 버튼들
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    actions.style.display = 'none';
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'action-btn';
+    delBtn.title = '삭제';
+    delBtn.textContent = '🗑️';
+    delBtn.onclick = () => removeImage(id, tile);
+
+    actions.append(delBtn);
+    tile.appendChild(actions);
+
+    // 홀드 이벤트 추가
+    let holdTimer;
+    const startHold = (e) => {
+      e.preventDefault();
+      holdTimer = setTimeout(() => {
+        actions.style.display = 'flex';
+      }, 500);
+    };
+    
+    const endHold = () => {
+      clearTimeout(holdTimer);
+    };
+    
+    const hideActions = () => {
+      clearTimeout(holdTimer);
+      actions.style.display = 'none';
+    };
+
+    tile.addEventListener('mousedown', startHold);
+    tile.addEventListener('touchstart', startHold);
+    tile.addEventListener('mouseup', endHold);
+    tile.addEventListener('touchend', endHold);
+    tile.addEventListener('mouseleave', hideActions);
+    tile.addEventListener('touchcancel', hideActions);
+
+    grid.appendChild(tile);
+  }
+
+  function escapeHtml(s) { return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;') }
+
+  function updateCount() { countEl.textContent = String(images.length); }
+
+  function enableDownloadIfAny() {
+    const ok = images.length > 0;
+    dlBtn.disabled = !ok;
+  }
+
+  // ===== 이미지 삭제 =====
+  function removeImage(id, tile) {
+    images = images.filter(x => x.id !== id);
+    tile.remove();
+    updateCount();
+    enableDownloadIfAny();
+  }
+
+  // ===== 드래그 정렬 =====
+  let dragId = null;
+  grid.addEventListener('dragstart', (e) => {
+    const tile = e.target.closest('.tile');
+    if (!tile) return;
+    dragId = tile.dataset.id;
+    tile.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', dragId); } catch {}
+  });
+  grid.addEventListener('dragend', (e) => {
+    const tile = e.target.closest('.tile');
+    if (tile) tile.classList.remove('dragging');
+    grid.classList.remove('drag-end');
+    grid.querySelectorAll('.tile.drop-target').forEach(t=>t.classList.remove('drop-target'));
+  });
+  grid.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    const after = getDragAfterElement(grid, e.clientY, e.clientX);
+    const dragging = grid.querySelector('.tile.dragging');
+    if (!dragging) return;
+    // 시각 피드백
+    grid.querySelectorAll('.tile.drop-target').forEach(t=>t.classList.remove('drop-target'));
+    if (after == null) {
+      grid.classList.add('drag-end');
+      grid.appendChild(dragging);
+    } else {
+      grid.classList.remove('drag-end');
+      after.classList.add('drop-target');
+      grid.insertBefore(dragging, after);
+    }
+  });
+  grid.addEventListener('drop', () => {
+    // DOM 순서를 상태 배열에 반영
+    const order = [...grid.querySelectorAll('.tile')].map(t => t.dataset.id);
+    images.sort((a,b) => order.indexOf(a.id) - order.indexOf(b.id));
+    grid.classList.remove('drag-end');
+    grid.querySelectorAll('.tile.drop-target').forEach(t=>t.classList.remove('drop-target'));
+  });
+
+  function getDragAfterElement(container, y, x) {
+    const els = [...container.querySelectorAll('.tile:not(.dragging)')];
+    return els.reduce((closest, child) => {
+      const rect = child.getBoundingClientRect();
+      const offset = y - (rect.top + rect.height / 2);
+      if (offset < 0 && offset > closest.offset) {
+        return { offset, element: child };
+      } else {
+        return closest;
+      }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+  }
+
+  // ===== PDF 생성 & 다운로드 =====
+  async function createAndDownload() {
+    if (!images.length) return;
+    if (!(await ensureLib())) return;
+    dlBtn.disabled = true;
+    statusEl.textContent = 'PDF 생성 중…';
+    prog.style.display = 'block'; prog.value = 0;
+
+    try {
+      const doc = await PDFDocument.create();
+
+      for (let i = 0; i < images.length; i++) {
+        const { file } = images[i];
+        const buf = await file.arrayBuffer();
+        
+        let img, dims;
+        if (file.type.includes('png')) {
+          img = await doc.embedPng(buf);
+          dims = img.scale(1);
+        } else {
+          img = await doc.embedJpg(buf);
+          dims = img.scale(1);
+        }
+        
+        const page = doc.addPage([dims.width, dims.height]);
+        page.drawImage(img, { x: 0, y: 0, width: dims.width, height: dims.height });
+        
+        if (i % 3 === 0) {
+          prog.value = Math.round((i + 1) / images.length * 100);
+        }
+      }
+
+      const bytes = await doc.save();
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = "images.pdf";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      alert("PDF 생성 중 오류가 발생했습니다: " + e.message);
+      console.error(e);
+    } finally {
+      prog.style.display = 'none';
+      statusEl.textContent = '';
+      enableDownloadIfAny();
+    }
+  }
+
+  // ===== 이벤트 =====
+  fileInput.onchange = () => addFiles(fileInput.files);
+
+  // 페이지 어디서든 기본 드롭 동작 무력화
+  ['dragover','drop'].forEach(ev => document.addEventListener(ev, e => e.preventDefault()));
+
+  ;['dragenter','dragover'].forEach(ev=>{
+    dropZone.addEventListener(ev, e=>{ e.preventDefault(); dropZone.classList.add('dragover'); });
+  });
+  ;['dragleave','drop'].forEach(ev=>{
+    dropZone.addEventListener(ev, e=>{ e.preventDefault(); dropZone.classList.remove('dragover'); });
+  });
+  dropZone.addEventListener('drop', e => {
+    const files = e.dataTransfer?.files || [];
+    addFiles(files);
+  });
+
+  clearBtn.onclick = () => {
+    images = [];
+    grid.innerHTML = '';
+    updateCount();
+    enableDownloadIfAny();
   };
+
+  dlBtn.onclick = createAndDownload;
+
+  function isImageFile(f) {
+    if (!f) return false;
+    if (f.type.startsWith('image/')) return true;
+    return /\.(jpg|jpeg|png|gif|webp)$/i.test(f.name || '');
+  }
 </script>
+</html>
