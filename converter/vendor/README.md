@@ -1,27 +1,63 @@
 # Vendor Libraries
 
-이 디렉터리에는 오프라인에서도 동작하는 로컬 전용 파일 변환 도구를 위한 라이브러리가 포함되어 있습니다.
+This directory contains libraries for local-only file conversion tools that work offline.
 
-## 포함된 라이브러리
+## Included Libraries
 
 ### PDF-lib 
-- **경로**: `pdf-lib/`
-- **파일들**:
-  - `pdf-lib.min.js` - PDF 생성 및 조작 라이브러리
-- **용도**: PDF 파일 생성, 합치기, 이미지를 PDF로 변환
-- **버전**: 1.17.1
+- **Path**: `pdf-lib/`
+- **Files**:
+  - `pdf-lib.min.js` - PDF generation and manipulation library
+- **Purpose**: PDF file creation, merging, image to PDF conversion
+- **Version**: 1.17.1
 
-## 특징
+### PDF.js
+- **Path**: `pdfjs/`
+- **Files**:
+  - `pdf.min.js` - PDF rendering library
+  - `pdf.worker.min.js` - PDF rendering web worker
+- **Purpose**: Render PDF files to canvas for preview generation
+- **Version**: 3.11.174
 
-- **완전한 로컬 동작**: 네트워크 연결 없이도 모든 기능 사용 가능
-- **개인정보 보호**: 파일이 외부 서버로 전송되지 않음
-- **빠른 로딩**: CDN 의존성 없이 즉시 라이브러리 로드
+## Library Roles
 
-## 업데이트 방법
+- **PDF-lib**: PDF creation, manipulation, saving (write)
+- **PDF.js**: PDF rendering, preview (read)
 
-라이브러리를 업데이트하려면:
+The combination of these two libraries provides a complete PDF processing environment.
+
+## Features
+
+- **Complete Local Operation**: All functions available without network connection
+- **Privacy Protection**: Files are not transmitted to external servers
+- **Fast Loading**: Instant library loading without CDN dependencies
+- **Optimized Performance**: Prevents duplicate parsing through caching
+
+## Update Method
+
+To update libraries:
 
 ```bash
-# PDF-lib 업데이트  
+# Update PDF-lib  
 curl -o pdf-lib/pdf-lib.min.js https://cdn.jsdelivr.net/npm/pdf-lib@latest/dist/pdf-lib.min.js
+
+# Update PDF.js
+cd pdfjs/
+curl -L https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js -o pdf.min.js
+curl -L https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js -o pdf.worker.min.js
+```
+
+## Library Usage
+
+```javascript
+// Initialize PDF.js
+pdfjsLib.workerSrc = '../vendor/pdfjs/pdf.worker.min.js';
+
+// PDF rendering (preview)
+const pdf = await pdfjsLib.getDocument(buffer).promise;
+const page = await pdf.getPage(1);
+
+// PDF creation/manipulation (save)
+const doc = await PDFLib.PDFDocument.create();
+const page = doc.addPage();
 ```
