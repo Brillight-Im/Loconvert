@@ -14,7 +14,6 @@
         <span>Loconvert</span>
       </a>
     </div>
-    <span class="tag">Local‑only</span>
   </div>
 </header>
 
@@ -89,9 +88,6 @@
   // 캐시: 파일별로 pdf.js 문서와 pdf-lib 문서 보관 (중복 파싱 방지)
   const cache = new Map(); // key: fileKey → { buffer, pdfjs, pdflib }
   
-  // 멀티셀렉트 상태
-  const selectedTiles = new Set();
-  let lastSelected = null;
   
   // 파일별 그림자 색상
   const shadowColors = [
@@ -222,91 +218,31 @@
     tile.draggable = true;
     tile.dataset.id = id;
 
-    // 파일별 색상 지정 (파일명 해시 기반)
+    // 파일별 색상
     const colorIndex = Array.from(fileName).reduce((acc, char) => acc + char.charCodeAt(0), 0) % shadowColors.length;
-    const shadowColor = shadowColors[colorIndex];
-    canvas.style.boxShadow = `0 4px 12px ${shadowColor}`;
+    canvas.style.boxShadow = `0 4px 12px ${shadowColors[colorIndex]}`;
 
-    // 캔버스 먼저
-    canvas.style.display = 'block';
     tile.appendChild(canvas);
     
-    // 파일명을 하단에
     const filename = document.createElement('div');
     filename.className = 'filename';
     filename.textContent = `${fileName} · p.${pageNo}`;
     tile.appendChild(filename);
 
-    // 홀드시 나타날 액션 버튼들
+    // 우상단 액션 버튼들
     const actions = document.createElement('div');
     actions.className = 'actions';
-    actions.style.display = 'none';
 
     const rotateBtn = document.createElement('button');
-    rotateBtn.className = 'action-btn';
-    rotateBtn.title = '90° 회전';
     rotateBtn.textContent = '↻';
-    rotateBtn.onclick = (e) => {
-      e.stopPropagation();
-      rotatePage(id, canvas);
-    };
+    rotateBtn.onclick = () => rotatePage(id, canvas);
 
     const delBtn = document.createElement('button');
-    delBtn.className = 'action-btn';
-    delBtn.title = '삭제';
-    delBtn.textContent = '🗑️';
-    delBtn.onclick = (e) => {
-      e.stopPropagation();
-      removePage(id, tile);
-    };
+    delBtn.textContent = '✕';
+    delBtn.onclick = () => removePage(id, tile);
 
     actions.append(rotateBtn, delBtn);
     tile.appendChild(actions);
-
-    // 선택 상태 관리
-    tile.addEventListener('click', (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        toggleSelect(tile);
-      } else if (e.shiftKey && lastSelected) {
-        selectRange(lastSelected, tile);
-      } else {
-        clearSelection();
-        selectTile(tile);
-      }
-    });
-
-    // 홀드 이벤트 (드래그와 분리)
-    let holdTimer;
-    let isDragging = false;
-    
-    tile.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return; // 좌클릭만
-      
-      holdTimer = setTimeout(() => {
-        if (!isDragging) {
-          actions.style.display = 'flex';
-        }
-      }, 800);
-    });
-    
-    tile.addEventListener('dragstart', () => {
-      isDragging = true;
-      clearTimeout(holdTimer);
-      actions.style.display = 'none';
-    });
-    
-    tile.addEventListener('dragend', () => {
-      isDragging = false;
-    });
-    
-    tile.addEventListener('mouseup', () => {
-      clearTimeout(holdTimer);
-    });
-    
-    tile.addEventListener('mouseleave', () => {
-      clearTimeout(holdTimer);
-      actions.style.display = 'none';
-    });
 
     grid.appendChild(tile);
   }
@@ -319,6 +255,7 @@
     const ok = pages.length > 0;
     dlBtn.disabled = !ok;
   }
+
 
   // ===== 회전/삭제 =====
   function rotatePage(id, canvasEl) {
@@ -345,50 +282,60 @@
     dragId = tile.dataset.id;
     tile.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
-    // 파이어폭스 호환: setData 필요
-    try { e.dataTransfer.setData('text/plain', dragId); } catch {}
+    e.dataTransfer.setData('text/plain', dragId);
   });
+  
   grid.addEventListener('dragend', (e) => {
     const tile = e.target.closest('.tile');
     if (tile) tile.classList.remove('dragging');
-    grid.classList.remove('drag-end');
     grid.querySelectorAll('.tile.drop-target').forEach(t=>t.classList.remove('drop-target'));
   });
+  
   grid.addEventListener('dragover', (e) => {
     e.preventDefault();
-    const after = getDragAfterElement(grid, e.clientY, e.clientX);
+    const after = getDragAfterElement(grid, e.clientX, e.clientY);
     const dragging = grid.querySelector('.tile.dragging');
     if (!dragging) return;
-    // 시각 피드백
+    
     grid.querySelectorAll('.tile.drop-target').forEach(t=>t.classList.remove('drop-target'));
-    if (after == null) {
-      grid.classList.add('drag-end');
-      grid.appendChild(dragging);
-    } else {
-      grid.classList.remove('drag-end');
+    if (after) {
       after.classList.add('drop-target');
       grid.insertBefore(dragging, after);
+    } else {
+      grid.appendChild(dragging);
     }
   });
-  grid.addEventListener('drop', () => {
-    // DOM 순서를 상태 배열에 반영
+  
+  grid.addEventListener('drop', (e) => {
+    e.preventDefault();
     const order = [...grid.querySelectorAll('.tile')].map(t => t.dataset.id);
     pages.sort((a,b) => order.indexOf(a.id) - order.indexOf(b.id));
-    grid.classList.remove('drag-end');
     grid.querySelectorAll('.tile.drop-target').forEach(t=>t.classList.remove('drop-target'));
   });
 
-  function getDragAfterElement(container, y, x) {
+  function getDragAfterElement(container, x, y) {
     const els = [...container.querySelectorAll('.tile:not(.dragging)')];
-    return els.reduce((closest, child) => {
-      const rect = child.getBoundingClientRect();
-      const offset = y - (rect.top + rect.height / 2);
-      if (offset < 0 && offset > closest.offset) {
-        return { offset, element: child };
-      } else {
-        return closest;
-      }
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
+    const containerRect = container.getBoundingClientRect();
+    
+    // 그리드의 열 수와 열 너비 계산
+    const computedStyle = getComputedStyle(container);
+    const gap = parseInt(computedStyle.gap) || 12;
+    const containerWidth = containerRect.width;
+    const minTileWidth = 160; // CSS의 minmax(160px, 1fr)
+    const cols = Math.floor((containerWidth + gap) / (minTileWidth + gap));
+    const colWidth = (containerWidth - (cols - 1) * gap) / cols;
+    
+    // 마우스 위치가 어느 열에 있는지 계산
+    const relativeX = x - containerRect.left;
+    const relativeY = y - containerRect.top;
+    const col = Math.floor(relativeX / (colWidth + gap));
+    const row = Math.floor(relativeY / (180 + gap)); // 대략적인 타일 높이
+    
+    // 해당 위치의 인덱스 계산
+    const targetIndex = row * cols + col;
+    
+    // 타겟 인덱스에 해당하는 요소 찾기
+    return els[targetIndex] || null;
   }
 
   // ===== 병합 & 다운로드 =====
@@ -467,5 +414,6 @@
     if (f.type === 'application/pdf') return true;
     return /\.pdf$/i.test(f.name || '');
   }
+
 </script>
 </html>
