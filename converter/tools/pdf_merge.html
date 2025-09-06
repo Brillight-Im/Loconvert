@@ -6,6 +6,7 @@
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="../shared/tool.css">
 <script src="../vendor/pdf-lib/pdf-lib.min.js"></script>
+<script src="../vendor/pdfjs/pdf.min.js"></script>
 <header class="site-top">
   <div class="container">
     <div class="brand">
@@ -53,16 +54,25 @@
   let degrees = null;
   
   async function ensureLibs() {
-    if (PDFDocument && degrees) return true;
+    if (PDFDocument && degrees && PDFJS) return true;
     try {
       // PDF-lib은 이미 로드됨
       if (window.PDFLib) {
         PDFDocument = window.PDFLib.PDFDocument;
         degrees = window.PDFLib.degrees;
+      } else {
+        statusEl.textContent = 'PDF-lib 라이브러리를 찾을 수 없습니다.';
+        return false;
+      }
+      
+      // PDF.js 초기화
+      if (window.pdfjsLib) {
+        PDFJS = window.pdfjsLib;
+        PDFJS.workerSrc = '../vendor/pdfjs/pdf.worker.min.js';
         return true;
       }
       
-      statusEl.textContent = 'PDF-lib 라이브러리를 찾을 수 없습니다.';
+      statusEl.textContent = 'PDF.js 라이브러리를 찾을 수 없습니다.';
       return false;
     } catch (e) {
       console.error('라이브러리 로드 실패', e);
@@ -85,8 +95,8 @@
   // ===== 상태 =====
   // pages: [{id, fileKey, pageIndex, buffer(ArrayBuffer), rotation(0/90/180/270)}]
   let pages = [];
-  // 캐시: 파일별로 pdf.js 문서와 pdf-lib 문서 보관 (중복 파싱 방지)
-  const cache = new Map(); // key: fileKey → { buffer, pdfjs, pdflib }
+  // 캐시: 파일별로 pdf-lib, pdf.js 문서 보관 (중복 파싱 방지)
+  const cache = new Map(); // key: fileKey → { buffer, pdflib, pdfjsDoc }
   
   
   // 파일별 그림자 색상
@@ -119,36 +129,38 @@
       const key = await fileKeyFromFile(f);
       if (!cache.has(key)) {
         const buf = await f.arrayBuffer();
-        cache.set(key, { buffer: buf, pdflib: null, name: f.name });
+        cache.set(key, { buffer: buf, pdflib: null, pdfjsDoc: null, name: f.name });
       }
       
       const entry = cache.get(key);
       
-      // PDF-lib으로 페이지 수 확인
+      // PDF-lib과 PDF.js로 페이지 수 확인 및 캐싱
       try {
         if (!entry.pdflib) entry.pdflib = await PDFDocument.load(entry.buffer);
+        if (!entry.pdfjsDoc) entry.pdfjsDoc = await PDFJS.getDocument(entry.buffer).promise;
+        
         const doc = entry.pdflib;
         const pageCount = doc.getPageCount();
         
         for (let i = 0; i < pageCount; i++) {
-          // 간단한 썸네일 (PDF 아이콘 + 정보)
-          const placeholder = createPdfPlaceholder();
+          // 캐시된 PDF.js 문서로 페이지 렌더링
+          const canvas = await renderPdfPageFromCached(entry.pdfjsDoc, i);
           
           // 상태 추가
           const id = crypto.randomUUID();
           pages.push({ id, fileKey: key, pageIndex: i, buffer: entry.buffer, rotation: 0, name: entry.name });
 
           // 타일 DOM 추가
-          addTile({ id, canvas: placeholder, fileName: entry.name, pageNo: i + 1 });
+          addTile({ id, canvas, fileName: entry.name, pageNo: i + 1 });
           updateCount();
         }
       } catch (e) {
         console.error('PDF 분석 실패:', e);
-        // 실패해도 1페이지로 가정
-        const placeholder = createPdfPlaceholder();
+        // 실패해도 1페이지로 가정하고 렌더링 시도
+        const canvas = await renderPdfPage(entry.buffer, 0);
         const id = crypto.randomUUID();
         pages.push({ id, fileKey: key, pageIndex: 0, buffer: entry.buffer, rotation: 0, name: entry.name });
-        addTile({ id, canvas: placeholder, fileName: entry.name, pageNo: 1 });
+        addTile({ id, canvas, fileName: entry.name, pageNo: 1 });
         updateCount();
       }
       
@@ -160,7 +172,64 @@
     enableDownloadIfAny();
   }
 
-  // PDF 플레이스홀더 캔버스 생성
+  // 캐시된 PDF.js 문서로 페이지 렌더링
+  async function renderPdfPageFromCached(pdfDoc, pageIndex) {
+    try {
+      const page = await pdfDoc.getPage(pageIndex + 1);
+      
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // 썸네일 크기 설정 (120x160)
+      const viewport = page.getViewport({ scale: 1 });
+      const scale = Math.min(120 / viewport.width, 160 / viewport.height);
+      const scaledViewport = page.getViewport({ scale });
+      
+      canvas.width = scaledViewport.width;
+      canvas.height = scaledViewport.height;
+      
+      await page.render({
+        canvasContext: ctx,
+        viewport: scaledViewport
+      }).promise;
+      
+      return canvas;
+    } catch (e) {
+      console.error('PDF 페이지 렌더링 실패:', e);
+      return createPdfPlaceholder();
+    }
+  }
+
+  // PDF 페이지 실제 렌더링 (fallback)
+  async function renderPdfPage(buffer, pageIndex) {
+    try {
+      const pdf = await PDFJS.getDocument(buffer).promise;
+      const page = await pdf.getPage(pageIndex + 1);
+      
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // 썸네일 크기 설정 (120x160)
+      const viewport = page.getViewport({ scale: 1 });
+      const scale = Math.min(120 / viewport.width, 160 / viewport.height);
+      const scaledViewport = page.getViewport({ scale });
+      
+      canvas.width = scaledViewport.width;
+      canvas.height = scaledViewport.height;
+      
+      await page.render({
+        canvasContext: ctx,
+        viewport: scaledViewport
+      }).promise;
+      
+      return canvas;
+    } catch (e) {
+      console.error('PDF 페이지 렌더링 실패:', e);
+      return createPdfPlaceholder();
+    }
+  }
+
+  // PDF 플레이스홀더 캔버스 생성 (fallback)
   function createPdfPlaceholder() {
     const canvas = document.createElement('canvas');
     canvas.width = 120;
@@ -258,13 +327,93 @@
 
 
   // ===== 회전/삭제 =====
-  function rotatePage(id, canvasEl) {
+  async function rotatePage(id, canvasEl) {
     const p = pages.find(x => x.id === id);
     if (!p) return;
     p.rotation = (p.rotation + 90) % 360;
+    
+    // 캐시에서 PDF.js 문서 찾기
+    const entry = cache.get(p.fileKey);
+    if (!entry || !entry.pdfjsDoc) {
+      console.error('캐시된 PDF 문서를 찾을 수 없습니다');
+      return;
+    }
+    
+    // 실제 PDF를 회전된 상태로 다시 렌더링
+    try {
+      const newCanvas = await renderPdfPageWithRotationFromCached(entry.pdfjsDoc, p.pageIndex, p.rotation);
+      const originalBoxShadow = canvasEl.style.boxShadow;
+      
+      // 기존 캔버스를 새 캔버스로 교체
+      canvasEl.parentNode.replaceChild(newCanvas, canvasEl);
+      newCanvas.style.boxShadow = originalBoxShadow;
+      
+      // 회전 버튼의 onclick 이벤트를 새 캔버스로 업데이트
+      const tile = newCanvas.closest('.tile');
+      const rotateBtn = tile.querySelector('.actions button');
+      if (rotateBtn) {
+        rotateBtn.onclick = () => rotatePage(id, newCanvas);
+      }
+    } catch (e) {
+      console.error('회전된 페이지 렌더링 실패:', e);
+    }
+  }
 
-    // 썸네일도 시각적으로 회전 (CSS transform)
-    canvasEl.style.transform = `rotate(${p.rotation}deg)`;
+  // 캐시된 문서로 회전이 적용된 PDF 페이지 렌더링
+  async function renderPdfPageWithRotationFromCached(pdfDoc, pageIndex, rotation) {
+    try {
+      const page = await pdfDoc.getPage(pageIndex + 1);
+      
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // 회전 고려한 viewport 계산
+      let viewport = page.getViewport({ scale: 1, rotation });
+      const scale = Math.min(120 / Math.abs(viewport.width), 160 / Math.abs(viewport.height));
+      viewport = page.getViewport({ scale, rotation });
+      
+      canvas.width = Math.abs(viewport.width);
+      canvas.height = Math.abs(viewport.height);
+      
+      await page.render({
+        canvasContext: ctx,
+        viewport: viewport
+      }).promise;
+      
+      return canvas;
+    } catch (e) {
+      console.error('회전된 PDF 페이지 렌더링 실패:', e);
+      return createPdfPlaceholder();
+    }
+  }
+
+  // 회전이 적용된 PDF 페이지 렌더링 (fallback)
+  async function renderPdfPageWithRotation(buffer, pageIndex, rotation) {
+    try {
+      const pdf = await PDFJS.getDocument(buffer).promise;
+      const page = await pdf.getPage(pageIndex + 1);
+      
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // 회전 고려한 viewport 계산
+      let viewport = page.getViewport({ scale: 1, rotation });
+      const scale = Math.min(120 / Math.abs(viewport.width), 160 / Math.abs(viewport.height));
+      viewport = page.getViewport({ scale, rotation });
+      
+      canvas.width = Math.abs(viewport.width);
+      canvas.height = Math.abs(viewport.height);
+      
+      await page.render({
+        canvasContext: ctx,
+        viewport: viewport
+      }).promise;
+      
+      return canvas;
+    } catch (e) {
+      console.error('회전된 PDF 페이지 렌더링 실패:', e);
+      return createPdfPlaceholder();
+    }
   }
 
   function removePage(id, tile) {
@@ -358,7 +507,12 @@
         const p = pages[i];
         const src = cache.get(p.fileKey).pdflib;
         const [copied] = await out.copyPages(src, [p.pageIndex]);
-        if (p.rotation) copied.setRotation(degrees(p.rotation));
+        
+        // 회전이 있는 경우 적용
+        if (p.rotation && p.rotation !== 0) {
+          copied.setRotation(degrees(p.rotation));
+        }
+        
         out.addPage(copied);
         if (i % 5 === 0) {
           prog.value = Math.round((i + 1) / pages.length * 100);

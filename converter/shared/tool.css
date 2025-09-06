@@ -21,15 +21,15 @@
 .drop.dragover{background:#f7faff;border-color:#5a8dee}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px; margin:16px 0 80px}
-.tile{display:flex;flex-direction:column;gap:8px;cursor:grab;position:relative;padding:4px}
+.tile{display:flex;flex-direction:column;gap:8px;cursor:grab;position:relative;padding:4px;overflow:hidden}
 .tile.dragging{opacity:.6}
-.tile canvas{border-radius:8px;max-width:100%;max-height:160px;object-fit:contain}
+.tile canvas{border-radius:8px;width:160px;height:160px;object-fit:contain;transform-origin:center;transition:transform 0.3s ease;display:block;margin:0 auto}
 .filename{text-align:center;font-size:11px;color:#666;padding:2px}
-.actions{position:absolute;top:4px;right:4px;display:flex;gap:6px;background:rgba(0,0,0,0.7);border-radius:12px;padding:4px}
+.actions{position:absolute;top:4px;right:4px;display:flex;gap:5px;background:rgba(0,0,0,0.7);border-radius:10px;padding:3px}
 .actions button{background:none;border:none;cursor:pointer;color:white;opacity:0.9;transition:opacity 0.2s}
 .actions button:hover{opacity:1;transform:scale(1.1)}
-.actions button:first-child{font-size:14px}
-.actions button:last-child{font-size:12px}
+.actions button:first-child{font-size:11px}
+.actions button:last-child{font-size:10px}
 
 .statusbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:10px;color:#555}
 .statusbar .left{display:flex;gap:12px;align-items:center}

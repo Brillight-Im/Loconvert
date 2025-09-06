@@ -14,7 +14,6 @@
         <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12L22 2 13 22 11 13 2 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Loconvert</span>
       </div>
-<span class="tag">Local‑only</span>
     </div>
   </header>
 
@@ -25,41 +24,25 @@
     </section>
 
     <aside class="hero-visual" aria-hidden="true">
-      <!-- Modern minimalist paper plane inspired by the reference image -->
-      <svg class="plane-3d" viewBox="0 0 200 140" role="img" aria-label="Paper plane">
+      
+      <svg class="plane-3d" viewBox="0 0 220 200" role="img" aria-label="Paper plane">
         <defs>
-          <linearGradient id="planeTop" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stop-color="#7dd3fc"/>
-            <stop offset="100%" stop-color="#38bdf8"/>
+          <linearGradient id="wing" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="#E9EDF5"/>
+            <stop offset="100%" stop-color="#C7DEFF"/>
           </linearGradient>
-          <linearGradient id="planeSide" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stop-color="#0ea5e9"/>
-            <stop offset="100%" stop-color="#0284c7"/>
+          <linearGradient id="body" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="#dfe7ff"/>
+            <stop offset="100%" stop-color="#4F83C9"/>
           </linearGradient>
-          <linearGradient id="planeDark" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stop-color="#0284c7"/>
-            <stop offset="100%" stop-color="#0369a1"/>
-          </linearGradient>
-          <filter id="planeShadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#1e40af" flood-opacity="0.15"/>
+          <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#000" flood-opacity="0.15"/>
           </filter>
         </defs>
-        
-        <g filter="url(#planeShadow)" transform="translate(10,10)">
-          <!-- Main wing top -->
-          <polygon points="10,70 160,20 90,120" fill="url(#planeTop)"/>
-          
-          <!-- Wing side/bottom visible edge -->
-          <polygon points="90,120 160,20 130,100" fill="url(#planeSide)"/>
-          
-          <!-- Body/fold center -->
-          <polygon points="10,70 90,120 130,100 120,40" fill="url(#planeDark)"/>
-          
-          <!-- Nose point -->
-          <polygon points="10,70 120,40 160,20" fill="url(#planeTop)"/>
-          
-          <!-- Subtle fold line -->
-          <line x1="10,70" x2="90,120" stroke="#0369a1" stroke-width="1" opacity="0.6"/>
+        <g filter="url(#shadow)" transform="translate(18,0) rotate(-10 100 100)">
+          <polygon points="0,50 140,150 181,91" fill="url(#body)"/>
+          <polygon points="0,50 180,90 180,75 140,60" fill="url(#wing)"/>
+          <polygon points="0,50 155,130 200,125 185,95" fill="url(#wing)"/>
         </g>
       </svg>
     </aside>
